@@ -102,7 +102,7 @@
       document.getElementById("speed").textContent = Math.round(c.wind_speed_10m);
       document.getElementById("gusts").textContent = Math.round(c.wind_gusts_10m);
       document.getElementById("dir").textContent = COMPASS[Math.round(c.wind_direction_10m / 22.5) % 16];
-      // Arrow points the way the wind is blowing (from direction + 180°).
+      // "↓" rotated by the from-direction points the way the wind is blowing.
       document.getElementById("arrow").style.transform = `rotate(${c.wind_direction_10m}deg)`;
 
       document.getElementById("hourly").innerHTML = d.hourly.time.map((t, i) => {
