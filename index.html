@@ -48,8 +48,15 @@
   </div>
 
   <div class="card">
+    <div class="lbl">What it feels like</div>
+    <p class="verdict" id="feelName" style="font-size:1.2rem;margin-top:6px">–</p>
+    <p id="feelDesc" style="margin:0 0 8px"></p>
+    <p class="meta" id="gustDesc" style="margin:0"></p>
+  </div>
+
+  <div class="card">
     <table>
-      <thead><tr><th>Next hours</th><th>Wind</th><th>Gusts</th><th>Rating</th></tr></thead>
+      <thead><tr><th>Next hours</th><th>Wind</th><th>Gusts</th><th>Feels like</th><th>Rating</th></tr></thead>
       <tbody id="hourly"></tbody>
     </table>
   </div>
@@ -80,6 +87,21 @@
     ][level];
   }
 
+  // Beaufort scale, translated into what you'd notice around the park.
+  const FEEL = [
+    { max: 1,  name: "Calm", desc: "Dead still. Smoke rises straight up; you won't notice any wind." },
+    { max: 4,  name: "Light air", desc: "Barely there. You might see smoke drift, but you won't feel it." },
+    { max: 8,  name: "Light breeze", desc: "You feel it on your face and hear leaves rustle. No effect on skating." },
+    { max: 13, name: "Gentle breeze", desc: "Leaves and small twigs keep moving; flags stretch out. Loose paper and light debris can blow onto the park." },
+    { max: 19, name: "Moderate breeze", desc: "Dust and litter get picked up, small branches sway. Pushing into it takes noticeably more effort." },
+    { max: 25, name: "Fresh breeze", desc: "Small trees sway and it's hard to keep a hat on. Headwinds slow you down and it can push you mid-air." },
+    { max: 32, name: "Strong breeze", desc: "Big branches move, wires whistle, umbrellas are hard to use. Airs and long lines get sketchy." },
+    { max: 39, name: "Near gale", desc: "Whole trees sway and walking into it is an effort. It can push you off line." },
+    { max: 47, name: "Gale", desc: "Twigs snap off trees and walking is hard. Not safe to skate." },
+    { max: Infinity, name: "Strong gale or worse", desc: "Things get damaged. Stay home." },
+  ];
+  const feel = mph => FEEL.find(f => mph < f.max);
+
   const fmt = (t, opts) => new Date(t).toLocaleString("en-US", { timeZone: "America/New_York", ...opts });
 
   async function load() {
@@ -99,6 +121,12 @@
       const v = document.getElementById("verdict");
       v.textContent = r.name; v.style.color = r.color; v.classList.remove("err");
       document.getElementById("advice").textContent = r.advice;
+      const f = feel(c.wind_speed_10m), gf = feel(c.wind_gusts_10m);
+      document.getElementById("feelName").textContent = `${f.name} (${Math.round(c.wind_speed_10m)} mph)`;
+      document.getElementById("feelDesc").textContent = f.desc;
+      document.getElementById("gustDesc").textContent = gf === f
+        ? "Gusts stay about this strength."
+        : `Gusts up to ${Math.round(c.wind_gusts_10m)} mph feel like a ${gf.name.toLowerCase()}: ${gf.desc}`;
       document.getElementById("speed").textContent = Math.round(c.wind_speed_10m);
       document.getElementById("gusts").textContent = Math.round(c.wind_gusts_10m);
       document.getElementById("dir").textContent = COMPASS[Math.round(c.wind_direction_10m / 22.5) % 16];
@@ -107,7 +135,7 @@
 
       document.getElementById("hourly").innerHTML = d.hourly.time.map((t, i) => {
         const s = d.hourly.wind_speed_10m[i], g = d.hourly.wind_gusts_10m[i], hr = rate(s, g);
-        return `<tr><td>${fmt(t + "Z", { hour: "numeric" })}</td><td>${Math.round(s)}</td><td>${Math.round(g)}</td>` +
+        return `<tr><td>${fmt(t + "Z", { hour: "numeric" })}</td><td>${Math.round(s)}</td><td>${Math.round(g)}</td><td>${feel(s).name}</td>` +
                `<td style="color:${hr.color}">${hr.name}</td></tr>`;
       }).join("");
 
