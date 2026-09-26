@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astoria Skatepark Wind</title>
+<meta name="description" content="Live wind report for Astoria Skate Park, Queens, NY">
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e1dc;
+          --calm:#1f9d55; --breezy:#c9a100; --windy:#e0701b; --nope:#d0342c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121212; --card:#1d1d1d; --fg:#f0f0f0; --muted:#a0a0a0; --line:#333; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:.9rem; margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px; }
+  .verdict { font-size:1.6rem; font-weight:700; margin:0 0 4px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; text-align:center; }
+  .num { font-size:2rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .lbl { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; }
+  .arrow { display:inline-block; transition:transform .4s; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td, th { padding:6px 4px; text-align:left; border-bottom:1px solid var(--line); font-size:.95rem; }
+  th { color:var(--muted); font-weight:500; font-size:.8rem; text-transform:uppercase; }
+  .meta { color:var(--muted); font-size:.8rem; }
+  button { font:inherit; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  .err { color:var(--nope); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Astoria Skatepark Wind</h1>
+  <p class="sub">Astoria Skate Park, Queens, NY · <span id="coords"></span></p>
+
+  <div class="card">
+    <p class="verdict" id="verdict">Loading…</p>
+    <p class="meta" id="advice"></p>
+  </div>
+
+  <div class="card grid">
+    <div><div class="num" id="speed">–</div><div class="lbl">Wind mph</div></div>
+    <div><div class="num" id="gusts">–</div><div class="lbl">Gusts mph</div></div>
+    <div><div class="num"><span class="arrow" id="arrow">↓</span> <span id="dir">–</span></div><div class="lbl">From</div></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Next hours</th><th>Wind</th><th>Gusts</th><th>Rating</th></tr></thead>
+      <tbody id="hourly"></tbody>
+    </table>
+  </div>
+
+  <p class="meta">
+    <span id="updated"></span><br>
+    Auto-refreshes every 5 min. Data: <a href="https://open-meteo.com/">Open-Meteo</a> (model data updated every 15 min, 10 m above ground).
+  </p>
+  <button id="refresh">Refresh now</button>
+</main>
+<script>
+  // Astoria Skate Park (OpenStreetMap way 220369871), under the RFK Bridge in Astoria Park.
+  const LAT = 40.7778, LON = -73.9254;
+  const REFRESH_MS = 5 * 60 * 1000;
+  const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+
+  document.getElementById("coords").textContent = `${LAT}, ${LON}`;
+
+  function rate(speed, gusts) {
+    let level = speed < 8 ? 0 : speed < 15 ? 1 : speed < 22 ? 2 : 3;
+    if (gusts >= 30) level = Math.max(level, 3);
+    else if (gusts >= 20) level = Math.max(level, 2);
+    return [
+      { name: "Calm", color: "var(--calm)", advice: "Go skate. Wind won't be a factor." },
+      { name: "Breezy", color: "var(--breezy)", advice: "Skateable. You'll feel it on big airs and long lines." },
+      { name: "Windy", color: "var(--windy)", advice: "Tricky. Expect pushback and gusts messing with airs." },
+      { name: "Don't bother", color: "var(--nope)", advice: "Too gusty for most sessions. Maybe tomorrow." },
+    ][level];
+  }
+
+  const fmt = (t, opts) => new Date(t).toLocaleString("en-US", { timeZone: "America/New_York", ...opts });
+
+  async function load() {
+    const url = "https://api.open-meteo.com/v1/forecast?" + new URLSearchParams({
+      latitude: LAT, longitude: LON,
+      current: "wind_speed_10m,wind_gusts_10m,wind_direction_10m",
+      hourly: "wind_speed_10m,wind_gusts_10m",
+      forecast_hours: 7, wind_speed_unit: "mph", timezone: "GMT",
+    });
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const c = d.current;
+      const r = rate(c.wind_speed_10m, c.wind_gusts_10m);
+
+      const v = document.getElementById("verdict");
+      v.textContent = r.name; v.style.color = r.color; v.classList.remove("err");
+      document.getElementById("advice").textContent = r.advice;
+      document.getElementById("speed").textContent = Math.round(c.wind_speed_10m);
+      document.getElementById("gusts").textContent = Math.round(c.wind_gusts_10m);
+      document.getElementById("dir").textContent = COMPASS[Math.round(c.wind_direction_10m / 22.5) % 16];
+      // Arrow points the way the wind is blowing (from direction + 180°).
+      document.getElementById("arrow").style.transform = `rotate(${c.wind_direction_10m}deg)`;
+
+      document.getElementById("hourly").innerHTML = d.hourly.time.map((t, i) => {
+        const s = d.hourly.wind_speed_10m[i], g = d.hourly.wind_gusts_10m[i], hr = rate(s, g);
+        return `<tr><td>${fmt(t + "Z", { hour: "numeric" })}</td><td>${Math.round(s)}</td><td>${Math.round(g)}</td>` +
+               `<td style="color:${hr.color}">${hr.name}</td></tr>`;
+      }).join("");
+
+      document.getElementById("updated").textContent =
+        `Conditions as of ${fmt(c.time + "Z", { hour: "numeric", minute: "2-digit" })} · checked ${fmt(Date.now(), { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
+    } catch (e) {
+      const v = document.getElementById("verdict");
+      v.textContent = "Couldn't load wind data"; v.style.color = ""; v.classList.add("err");
+      document.getElementById("advice").textContent = e.message;
+    }
+  }
+
+  document.getElementById("refresh").addEventListener("click", load);
+  load();
+  setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
